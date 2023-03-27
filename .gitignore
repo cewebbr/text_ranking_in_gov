@@ -1,0 +1,11 @@
+# System trash:
+analysis/__pycache__
+analysis/.ipynb_checkpoints
+
+# Large files that are downloaded by the notebook from cloud:
+data/*.csv
+data/*.zip
+
+# Temporary local files:
+analysis/modelo_classificacao_artigos_DOU_1.ipynb
+imagens/10_framing-the-problem_goal.png
