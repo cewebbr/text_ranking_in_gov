@@ -1,12 +1,13 @@
 # Overseeing government with AI
-## Automated ranking and filtering of legal notices in the government gazette
+
+**Automated ranking and filtering of legal notices in the government gazette**
 
 Tutorial to be presented at [ICEDEG 2023](https://edem-egov.org/)
-(Ninth International Conference on eDemocracy & eGovernment)
+(Ninth International Conference on eDemocracy & eGovernment).
 
 ## License
 
-Created by [Henrique S. Xavier](http://henriquexavier.net)
+Created by [Henrique S. Xavier](http://henriquexavier.net).
 
 This tutorial is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
