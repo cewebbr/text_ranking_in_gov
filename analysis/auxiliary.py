@@ -27,6 +27,7 @@ from datasets import Dataset
 from transformers import DefaultDataCollator
 from zlib import crc32
 from sklearn.metrics import ndcg_score
+import tensorflow as tf
 
 
 def multicircles(x, y, d=0.035):
@@ -355,6 +356,77 @@ def train_test_split_by_string(df, test_frac, col, prefix=''):
     ids = df[col]
     in_test_set = ids.apply(lambda s: test_set_check_by_string(s, test_frac, prefix))
     return df.loc[~in_test_set], df.loc[in_test_set]
+
+
+def tf_ndcg(y_true, y_pred, k=None):
+    """
+    Normalized Discounted Cumulative Gain (NDCG) metric implementation in TensorFlow.
+    Args:
+        y_true: Tensor of shape (batch_size, num_items) with the true relevance scores.
+        y_pred: Tensor of shape (batch_size, num_items) with the predicted relevance scores.
+        k: The maximum number of items to consider in the ranking.
+    Returns:
+        NDCG metric value as a scalar tensor.
+    """
+
+    # Bug fix:
+    y_true = tf.transpose(y_true)
+    y_pred = tf.transpose(y_pred)
+    
+    # Use all data if k is not provided:
+    if k == None:
+        k = tf.shape(y_pred)[1]
+    
+    # Get the indices that order the predictions (descending):
+    _, indices = tf.math.top_k(y_pred, k=k)
+    # Order the true labels according to the predictions:
+    y_true = tf.gather(y_true, indices, batch_dims=1)
+    # Compute the gain of each treu label:
+    gain = tf.pow(2.0, y_true) - 1.0
+    
+    discounts = tf.math.log1p(tf.cast(tf.range(1, k+1), dtype=tf.float32)) / tf.math.log(2.0)
+    dcg = tf.reduce_sum(gain / discounts, axis=1)
+    idcg = tf.reduce_sum(tf.sort(gain, axis=1, direction='DESCENDING')[:, :k] / discounts, axis=1)
+    ndcg = dcg / idcg
+    return tf.reduce_mean(ndcg)
+
+
+def my_ndcg(y_true, y_pred):
+    """
+    Compute the Normalized Discounted Cumulative Gain (nDCG)
+    metric.
+    
+    Parameters
+    ----------
+    y_true : 1D array
+        True relevance, from the lowest (0) to the highest.
+    y_pred : 1D array
+        Predicted relevance, used for sorting the instances.
+    
+    Returns
+    -------
+    nDCG : float
+        The metric.
+    """
+    # Order true labels based on predictions:
+    sorted_idx  = np.argsort(y_pred)[::-1]
+    sorted_true = y_true[sorted_idx]
+    
+    # Compute gain from relevance:
+    exp_gain = 2**sorted_true - 1
+    # Compute order discount:
+    discount = np.log2(np.arange(1, 1 + len(y_true)) + 1)
+     
+    # Compute the Discounted Cumulative Gain: 
+    DCG = np.sum(exp_gain / discount)  
+    # Compute the same for the perfect ordering:
+    ideal_gain = exp_gain[np.argsort(exp_gain)[::-1]]
+    iDCG = np.sum(ideal_gain / discount)  
+    
+    # Normalize:
+    nDCG = DCG / iDCG
+    
+    return nDCG
 
 
 def ndcg_metric(y_true, y_pred):
