@@ -449,3 +449,15 @@ def ndcg_metric(y_true, y_pred):
         The nDCG score.
     """
     return ndcg_score(np.array([y_true]), np.array([y_pred]))
+
+
+def plot_loss_per_epoch(history):
+    """
+    Plot a Tensorflow model loss vs. epoch for a given model fit 
+    output `history`.
+    """
+    pl.plot(history.history['loss'], marker='.', alpha=0.5, color='b', label='Train')
+    pl.plot(history.history['val_loss'], marker='.', alpha=0.5, color='r', label='Valid')
+    pl.legend()
+    pl.xlabel('Epoch')
+    pl.ylabel('Loss')
