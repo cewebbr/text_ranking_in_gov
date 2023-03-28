@@ -23,6 +23,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import matplotlib.patches as patches
 import matplotlib.pyplot as pl
 import numpy as np
+from datasets import Dataset
+from transformers import DefaultDataCollator
+from zlib import crc32
+from sklearn.metrics import ndcg_score
+
 
 def multicircles(x, y, d=0.035):
     """
@@ -150,3 +155,225 @@ def print_arrays_heads(arrays, names, n=5):
     
     for arr, name in zip(arrays, names):
         print((name + ':').ljust(name_len + 1), arr[:n])
+
+
+def process_pandas_to_tfdataset(df, tokenizer, max_length=80, shuffle=True, text_col='text', target_col='label', batch_size=8):
+    """
+    Prepare NLP data in a Pandas DataFrame to be used 
+    in a TensorFlow transformer model.
+    
+    Parameters
+    ----------
+    df : DataFrame
+        The corpus, containing the columns `text_col` 
+        (the sentences) and `target_col` (the labels).
+    tokenizer : HuggingFace AutoTokenizer
+        A tokenizer loaded from 
+        `transformers.AutoTokenizer.from_pretrained()`.
+    max_length : int
+        Maximum length of the sentences (smaller 
+        sentences will be padded and longer ones
+        will be truncated). This is required for 
+        training, so batches have instances of the
+        same shape.
+    shuffle : bool
+        Shuffle the dataset order when loading. 
+        Recommended True for training, False for 
+        validation/evaluation.
+    text_col : str
+        Name of `df` column containing the sentences.
+    target_col : str
+        Name of `df` column containing the labels of 
+        the sentences.
+    batch_size : int
+        The size of the batch in the output 
+        tensorflow dataset.
+        
+    Returns
+    -------
+    tf_dataset : TF dataset
+        A dataset that can be fed into a transformer 
+        model.
+    """
+    
+    # Security checks:
+    renamed_df = df.rename({target_col:'labels'}, axis=1) # Hugging Face requer esse nome p/ y.
+    
+    # Define função para processar os dados com o tokenizador:
+    def tokenize_function(examples):
+        return tokenizer(examples[text_col], padding=True, max_length=max_length, truncation=True)
+    
+    # pandas -> hugging face:
+    hugging_set = Dataset.from_pandas(renamed_df)
+    # texto -> sequência de IDs: 
+    encoded_set = hugging_set.map(tokenize_function, batched=True)
+    
+    # hugging face -> tensorflow dataset:
+    data_collator = DefaultDataCollator(return_tensors="tf")
+    tf_dataset = encoded_set.to_tf_dataset(columns=["attention_mask", "input_ids", "token_type_ids"], label_cols=["labels"], shuffle=shuffle, collate_fn=data_collator, batch_size=batch_size)
+    
+    return tf_dataset
+
+
+def count_tokens(string, tokenizer, max_length=None):
+    """
+    Count the number of tokens (int) in `string` (str) returned by 
+    `tokenizer` (BertTokenizer), clipping it to `max_length` (int or 
+    None).
+    """
+
+    if max_length is None:
+        truncation = False
+    else:
+        truncation = True
+
+    n_tokens = len(tokenizer(string, padding=True, max_length=max_length, truncation=truncation)['input_ids'])
+    return n_tokens
+
+
+def crop_to_max_tokens(string, tokenizer, max_length=512):
+    """
+    Crop string to a maximum number of tokens.
+    """
+    tokens = tokenizer.tokenize(string)[:max_length]
+    cropped = tokenizer.convert_tokens_to_string(tokens)
+    
+    return cropped
+
+
+def skip_preamble(text_series, preamble_regex):
+    """
+    Returns the substrings that follow the regular expression.
+    
+    Parameters
+    ----------
+    text_series : Series
+        Series containing strings to be cropped.
+    preamble_regex : str
+        Regular expression representing the start of the important
+        segment of the text.
+    
+    Returns
+    -------
+    final_text : Series
+        Texts that follow `preamble_regex`. If the regex is not 
+        found, return the input text.
+    """
+    
+    # Select text that follows the regex:
+    sel_text = text_series.str.extract('(?:' + preamble_regex + ')(.*)')[0]
+    # Use the whole text if regex is not found:
+    final_text = sel_text.fillna(text_series)
+    
+    return final_text
+
+
+def to_titlecase(match):
+    """
+    Transform the string in a regex `match` group to title case.
+    """
+    return match.group(0).title()
+
+
+def all_caps_to_title(text_series, min_len=3):
+    """
+    Transform all caps substrings in entries in the `text_series` 
+    (Series) with length `min_len` (int) or greater to title case.
+    """
+    return text_series.str.replace('([A-ZÇÃÁÀÂÊÉÍÓÕÔÚ]{' + str(min_len) + ',})', to_titlecase, regex=True)
+
+
+def limit_ellipsis(text_series, max_len=3):
+    """
+    Limit the size of a sequence of periods in the strings in 
+    Series `text_series` to `max_len` (int).
+    """
+    
+    # Create replacement:
+    ellipsis = ''.join(['.'] * max_len)
+    # Set search regex:
+    regex = r'\.{' + str(max_len) + ',}'
+    
+    return text_series.str.replace(regex, ellipsis, regex=True)
+
+
+def hash_string(string, prefix=''):
+    """
+    Takes a `string` as input, remove `prefix` from it and turns it into a hash.
+    """
+    name   = string.replace(prefix, '')
+    return crc32(bytes(name, 'utf-8'))
+
+
+def test_set_check_by_string(string, test_frac, prefix=''):
+    """
+    Returns a boolean array saying if the data identified by `string` belongs to the test set or not.
+    
+    Parameters
+    ----------
+    string : str
+        The string that uniquely identifies an example.
+    test_frac : float
+        The fraction of the complete dataset that should go to the test set (0 to 1).
+    prefix : str (default '')
+        A substring to remove from `string` before deciding where to place the example.
+        
+    Returns
+    -------
+    is_test : bool
+        A bool number saying if the example belongs to the test set.
+    """
+
+    return hash_string(string, prefix) & 0xffffffff < test_frac * 2**32
+
+
+def train_test_split_by_string(df, test_frac, col, prefix=''):
+    """
+    Split a DataFrame `df` into train and test sets based on string hashing.
+    
+    Input
+    -----
+    
+    df : Pandas DataFrame
+        The data to split.
+        
+    test_frac : float
+        The fraction of `df` that should go to the test set (0 to 1).
+
+    col : str or int
+        The name of the `df` column to use as identifier (to be hashed).
+        
+    prefix : str (default '')
+        A substring to remove from the rows in column `col` of `df` 
+        before deciding where to place the example.
+        
+    Returns
+    -------
+    
+    The train and the test sets (Pandas DataFrames).
+    """
+    ids = df[col]
+    in_test_set = ids.apply(lambda s: test_set_check_by_string(s, test_frac, prefix))
+    return df.loc[~in_test_set], df.loc[in_test_set]
+
+
+def ndcg_metric(y_true, y_pred):
+    """
+    The Normalized Discounted Cumulative Gain (nDCG) metric
+    with input shape the same as other regression metrics.
+    
+    Parameter
+    ---------
+    y_true : 1D array of floats or ints
+        True relevance of the instances. For a 5-level 
+        scale, they should be {0, 1, 2, 3, 4}.
+    y_true : 1D array of floats
+        Predicted relevance of the instances.
+    
+    Returns
+    -------
+    
+    ndcg : float
+        The nDCG score.
+    """
+    return ndcg_score(np.array([y_true]), np.array([y_pred]))
