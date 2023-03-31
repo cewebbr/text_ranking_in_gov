@@ -340,6 +340,13 @@ def tokenize_cargos(regex_token, text, verbose=False):
     return result
 
 
+def crop_text(text, max_length):
+    """
+    Crop the `text` (string) to the first `max_length` (int) words.
+    """
+    return ' '.join(text.split()[:max_length])
+
+
 class PreProcessText(BaseEstimator, TransformerMixin):
     """
     Preprocess text (no fitting required) stored in a DataFrame columns.
@@ -355,7 +362,8 @@ class PreProcessText(BaseEstimator, TransformerMixin):
     -- Remove stopwords (list of str);
     -- Use `stemmer` to stem the words;
     -- Remove accents; 
-    -- Keep only letters (and the dollar sign, if requested).
+    -- Keep only letters (and the dollar sign, if requested);
+    -- Crop the text at a maximum length.
     
     Return
     ------
@@ -364,7 +372,7 @@ class PreProcessText(BaseEstimator, TransformerMixin):
     """
     def __init__(self, text_cols=None, lowercase=True, value_tokens=True, remove_punctuation=True, 
                  keep_cash=True, stopwords=None, stemmer=None, strip_accents=True, only_letters=True,
-                 cargo_tokens=True):
+                 cargo_tokens=True, crop_at=None):
         self.text_cols          = text_cols
         self.lowercase          = lowercase
         self.value_tokens       = value_tokens
@@ -375,6 +383,7 @@ class PreProcessText(BaseEstimator, TransformerMixin):
         self.strip_accents      = strip_accents
         self.only_letters       = only_letters
         self.cargo_tokens       = cargo_tokens
+        self.crop_at            = crop_at
         
         # Value to token regex:
         regex1_str = r'[rR]\$ ?(\d{1,3}(?:\.\d{3}){0,4}\,?\d{0,2})'
@@ -458,9 +467,37 @@ class PreProcessText(BaseEstimator, TransformerMixin):
                 # Keep only leters:
                 if self.only_letters:
                     df[col] = df[col].apply(lambda s: keep_only_letters(s, self.keep_cash))
+                # Crop text:
+                if self.crop_at is not None:
+                    df[col] = df[col].apply(lambda s: crop_text(s, self.crop_at))
+                    
         return df
 
 
+class CropText(BaseEstimator, TransformerMixin):
+    
+    def __init__(self, max_length=None):
+        """
+        Crop text on the right to `max_length`.
+        """
+        self.max_length = max_length
+        
+    def fit(self, X, y=None):
+        return self
+    
+    def transform(self, X):
+        """
+        Crop the text. `X` must be a Pandas Series of str.
+        """
+        if self.max_length is None:
+            return X
+        else:
+            return X.str.split().str.slice(0, self.max_length).str.join(' ')
+    
+    def get_feature_names_out(self, input_features=None):
+        return np.array([])
+
+    
 #############################################
 ### Custom Transformers (fitting required ###
 #############################################
