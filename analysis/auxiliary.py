@@ -305,7 +305,7 @@ def my_ndcg(y_true, y_pred):
     Parameters
     ----------
     y_true : 1D array
-        True relevance, from the lowest (0) to the highest.
+        True relevance, from the lowest (1) to the highest.
     y_pred : 1D array
         Predicted relevance, used for sorting the instances.
     
@@ -316,7 +316,7 @@ def my_ndcg(y_true, y_pred):
     """
     # Order true labels based on predictions:
     sorted_idx  = np.argsort(y_pred)[::-1]
-    sorted_true = y_true[sorted_idx]
+    sorted_true = y_true[sorted_idx] - 1
     
     # Compute gain from relevance:
     exp_gain = 2**sorted_true - 1
@@ -367,3 +367,28 @@ def plot_loss_per_epoch(history):
     pl.legend()
     pl.xlabel('Epoch')
     pl.ylabel('Loss')
+
+
+def doc_to_word_list(doc, preprocessor, tokenizer):
+    """
+    Transform the document into a list of words using the 
+    vectorizer preprocessor and tokenizer.
+    """
+    return tokenizer(preprocessor(doc))
+
+
+def pad_array(arr, min_length):
+    """
+    Right pad an array `arr` with zeros so its length is 
+    at least `min_length` (int).
+    """
+    
+    # Return the array if the length is greater than the minimum required:
+    if len(arr) >= min_length:
+        return arr
+    
+    # Add zeros to the right to pad it to the required length:
+    else:
+        pad_length = min_length - len(arr)
+        padding = np.zeros((pad_length,), dtype=arr.dtype)
+        return np.concatenate((arr, padding))
