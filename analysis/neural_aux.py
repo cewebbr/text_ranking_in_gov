@@ -47,8 +47,8 @@ def tf_ndcg(y_true, y_pred, k=None):
     
     # Get the indices that order the predictions (descending):
     _, indices = tf.math.top_k(y_pred, k=k)
-    # Order the true labels according to the predictions:
-    y_true = tf.gather(y_true, indices, batch_dims=1)
+    # Order the true labels according to the predictions and make lowest relevance 1 -> 0:
+    y_true = tf.gather(y_true, indices, batch_dims=1) - 1.0
     # Compute the gain of each treu label:
     gain = tf.pow(2.0, y_true) - 1.0
     
@@ -59,6 +59,46 @@ def tf_ndcg(y_true, y_pred, k=None):
     return tf.reduce_mean(ndcg)
 
 
+class NDCGMetric(tf.keras.metrics.Metric):
+    def __init__(self, max_size, init_value=1, name='nDCG', **kwargs):
+        """
+        Create a Normalized Discounted Cumulative Gain Metric
+        for evaluating a model during training.
+        """
+
+        super().__init__(name=name, **kwargs)
+        self.max_size = max_size
+        self.init_value = init_value
+        
+        self.true_init   = tf.keras.initializers.Constant(init_value)
+        self.true_labels = self.add_weight(name='true_labels', shape=(max_size, 1), dtype=tf.float32, initializer=self.true_init)
+        self.pred_init   = tf.keras.initializers.Constant(0)
+        self.pred_labels = self.add_weight(name='pred_labels', shape=(max_size, 1), dtype=tf.float32, initializer=self.pred_init)
+        self.n_stored    = self.add_weight(name='n_stored', dtype=tf.int32, initializer='zeros')
+        self.batch_size  = self.add_weight(name='batch_size', dtype=tf.int32, initializer='zeros')
+        
+    def update_state(self, y_true, y_pred, sample_weight=None):
+
+        self.batch_size.assign(tf.shape(y_true)[0])
+        self.true_labels.assign(tf.concat([self.true_labels[:self.n_stored], y_true, self.true_labels[self.n_stored + self.batch_size:]], axis=0))
+        self.pred_labels.assign(tf.concat([self.pred_labels[:self.n_stored], y_pred, self.pred_labels[self.n_stored + self.batch_size:]], axis=0))
+        self.n_stored.assign(self.n_stored + self.batch_size)
+        
+    def result(self):
+        return tf_ndcg(self.true_labels[:self.n_stored], self.pred_labels[:self.n_stored])
+
+    def get_config(self):
+        base_config = super().get_config()
+        return {**base_config, 'max_size':self.max_size, 'init_value':self.init_value}
+
+    def reset_state(self):
+        self.true_labels.assign(self.true_init((self.max_size, 1), dtype=tf.float32))
+        self.pred_labels.assign(self.pred_init((self.max_size, 1), dtype=tf.float32))
+        self.n_stored.assign(0)
+        self.batch_size.assign(0)
+
+
+    
 def process_pandas_to_tfdataset(df, tokenizer, max_length=80, shuffle=True, text_col='text', target_col='label', batch_size=8):
     """
     Prepare NLP data in a Pandas DataFrame to be used 
