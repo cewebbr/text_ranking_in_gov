@@ -155,3 +155,29 @@ def process_pandas_to_tfdataset(df, tokenizer, max_length=80, shuffle=True, text
     tf_dataset = encoded_set.to_tf_dataset(columns=["attention_mask", "input_ids", "token_type_ids"], label_cols=["labels"], shuffle=shuffle, collate_fn=data_collator, batch_size=batch_size)
     
     return tf_dataset
+
+
+class SplitSequences(tf.keras.layers.Layer):
+    def __init__(self, max_length, **kwargs):
+        super().__init__(**kwargs)
+        self.max_length = max_length
+
+    def build(self, batch_input_shape):
+        # Get input shape (with batch size):
+        self.batch_size = batch_input_shape[0]
+        self.seq_length = batch_input_shape[1]
+        # Compute the number of subsequences (NOTE: seq_length must always be a multiple of max_length):
+        self.n_subseqs  = tf.cast(tf.math.ceil(self.seq_length / self.max_length), tf.int32)
+        # Build layer:
+        super().build(batch_input_shape) # must be at the end
+
+    def call(self, X):
+        #return tf.reshape(X, (self.batch_size, self.n_subseqs, self.max_length))
+        return tf.reshape(X, (-1, self.n_subseqs, self.max_length))
+
+    def compute_output_shape(self, batch_input_shape):
+        return tf.TensorShape([self.batch_size, self.n_subseqs, self.max_length])
+
+    def get_config(self):
+        base_config = super().get_config()
+        return {**base_config, "max_length":self.max_length, "n_subseqs":self.n_subseqs}
