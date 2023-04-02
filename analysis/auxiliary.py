@@ -23,6 +23,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import matplotlib.patches as patches
 import matplotlib.pyplot as pl
 import numpy as np
+import pandas as pd
 from zlib import crc32
 from sklearn.metrics import ndcg_score
 
@@ -304,9 +305,9 @@ def my_ndcg(y_true, y_pred):
     
     Parameters
     ----------
-    y_true : 1D array
+    y_true : 1D array or Series
         True relevance, from the lowest (1) to the highest.
-    y_pred : 1D array
+    y_pred : 1D array or Series
         Predicted relevance, used for sorting the instances.
     
     Returns
@@ -314,6 +315,19 @@ def my_ndcg(y_true, y_pred):
     nDCG : float
         The metric.
     """
+
+    # Beware of lists:
+    if type(y_true) == list:
+        y_true = np.array(y_true)
+    if type(y_pred) == list:
+        y_pred = np.array(y_pred)    
+
+    # Beware of Series:
+    if type(y_true) == pd.Series:
+        y_true = y_true.values
+    if type(y_pred) == pd.Series:
+        y_pred = y_pred.values    
+    
     # Order true labels based on predictions:
     sorted_idx  = np.argsort(y_pred)[::-1]
     sorted_true = y_true[sorted_idx] - 1
