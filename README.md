@@ -5,6 +5,16 @@
 Tutorial to be presented at [ICEDEG 2023](https://edem-egov.org/)
 (Ninth International Conference on eDemocracy & eGovernment).
 
+
+## Running on Google Colab
+
+1. Access <https://colab.research.google.com> and create a new notebook.
+2. Go to 'File > Upload notebook', then select 'GitHub'.
+3. Put the address of this repository (<https://github.com/cewebbr/text_ranking_in_gov>) on the text box, select the appropriate repository and
+   click on the notebook link 'analysis/tutorial_Overseeing-gov-with-AI.ipynb'.
+4. Once the notebook is loaded, go to 'Runtime > Change runtime type' and 
+5. Select 'GPU' and save.
+
 ## License
 
 Created by [Henrique S. Xavier](http://henriquexavier.net).
