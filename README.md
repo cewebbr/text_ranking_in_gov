@@ -4,6 +4,7 @@
 
 Tutorial presented at [ICEDEG 2023](https://edem-egov.org/)
 (Ninth International Conference on eDemocracy & eGovernment).
+It can be followd at: [analysis/tutorial_Overseeing-gov-with-AI.ipynb](analysis/tutorial_Overseeing-gov-with-AI.ipynb).
 
 
 ## Running on Google Colab
