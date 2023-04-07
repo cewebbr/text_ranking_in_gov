@@ -2,7 +2,7 @@
 
 **Automated ranking and filtering of legal notices in the government gazette**
 
-Tutorial to be presented at [ICEDEG 2023](https://edem-egov.org/)
+Tutorial presented at [ICEDEG 2023](https://edem-egov.org/)
 (Ninth International Conference on eDemocracy & eGovernment).
 
 
